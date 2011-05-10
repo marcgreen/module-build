@@ -1,8 +1,12 @@
 #!/usr/bin/perl -w
+# If Test::Without::Module is installed, then tests are explicitely run with *and* without
+#   Pod::Simple, assuming it is installed.
+# If T::W/o::M is not installed, then the tests run with *or* without Pod::Simple
+#  (depending on if it is installed or not)
 
 use strict;
 use lib 't/lib';
-use MBTest tests => 9;
+use MBTest;
 
 blib_load('Module::Build::PodParser');
 
@@ -23,8 +27,22 @@ blib_load('Module::Build::PodParser');
   }
 }
 
-local *FH;
-tie *FH, 'IO::StringBased', <<'EOF';
+if (eval{ require Test::Without::Module; 1; }) {
+  import Test::Without::Module qw(Pod::Parser);
+
+  run_tests();
+  eval q{ no Test::Without::Module qw( Pod::Parser ) };
+  run_tests();
+} else {
+  warn "Install Test::Without::Module for more extensive test coverage\n";
+  run_tests();
+}
+
+done_testing();
+
+sub run_tests {
+  local *FH;
+  tie *FH, 'IO::StringBased', <<'EOF';
 =head1 NAME
 
 Foo::Bar - Perl extension for blah blah blah
@@ -39,17 +57,17 @@ Home page: http://example.com/~eh/
 EOF
 
 
-my $pp = Module::Build::PodParser->new(fh => \*FH);
-ok $pp, 'object created';
+  my $pp = Module::Build::PodParser->new(fh => \*FH);
+  ok $pp, 'object created';
 
-is $pp->get_author->[0], 'C<Foo::Bar> was written by Engelbert Humperdinck I<E<lt>eh@example.comE<gt>> in 2004.', 'author';
-is $pp->get_abstract, 'Perl extension for blah blah blah', 'abstract';
+  is $pp->get_author->[0], 'C<Foo::Bar> was written by Engelbert Humperdinck I<E<lt>eh@example.comE<gt>> in 2004.', 'author';
+  is $pp->get_abstract, 'Perl extension for blah blah blah', 'abstract';
 
 
-{
-  # Try again without a valid author spec
-  untie *FH;
-  tie *FH, 'IO::StringBased', <<'EOF';
+  {
+    # Try again without a valid author spec
+    untie *FH;
+    tie *FH, 'IO::StringBased', <<'EOF';
 =head1 NAME
 
 Foo::Bar - Perl extension for blah blah blah
@@ -57,18 +75,18 @@ Foo::Bar - Perl extension for blah blah blah
 =cut
 EOF
 
-  my $pp = Module::Build::PodParser->new(fh => \*FH);
-  ok $pp, 'object created';
+    my $pp = Module::Build::PodParser->new(fh => \*FH);
+    ok $pp, 'object created';
 
-  is_deeply $pp->get_author, [], 'author';
-  is $pp->get_abstract, 'Perl extension for blah blah blah', 'abstract';
-}
+    is_deeply $pp->get_author, [], 'author';
+    is $pp->get_abstract, 'Perl extension for blah blah blah', 'abstract';
+  }
 
 
-{
-    # Try again with mixed-case =head1s.
-  untie *FH;
-  tie *FH, 'IO::StringBased', <<'EOF';
+  {
+      # Try again with mixed-case =head1s.
+    untie *FH;
+    tie *FH, 'IO::StringBased', <<'EOF';
 =head1 Name
 
 Foo::Bar - Perl extension for blah blah blah
@@ -82,9 +100,10 @@ Home page: http://example.com/~eh/
 =cut
 EOF
 
-  my $pp = Module::Build::PodParser->new(fh => \*FH);
-  ok $pp, 'object created';
+    my $pp = Module::Build::PodParser->new(fh => \*FH);
+    ok $pp, 'object created';
 
-  is $pp->get_author->[0], 'C<Foo::Bar> was written by Engelbert Humperdinck I<E<lt>eh@example.comE<gt>> in 2004.', 'author';
-  is $pp->get_abstract, 'Perl extension for blah blah blah', 'abstract';
+    is $pp->get_author->[0], 'C<Foo::Bar> was written by Engelbert Humperdinck I<E<lt>eh@example.comE<gt>> in 2004.', 'author';
+    is $pp->get_abstract, 'Perl extension for blah blah blah', 'abstract';
+  }
 }
